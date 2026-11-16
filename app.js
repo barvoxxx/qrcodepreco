@@ -15,6 +15,8 @@ import {
   getDocs,
   getFirestore,
   serverTimestamp,
+  updateDoc,
+  writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -30,6 +32,7 @@ let authMode = "login";
 let scanner = null;
 let scannerStarted = false;
 let activeQrProduct = null;
+let editingProductId = null;
 let toastTimeout;
 
 $("#today-date").textContent = new Intl.DateTimeFormat("pt-BR", {
@@ -67,6 +70,24 @@ function qrUrl(productId, userId = currentUser.uid) {
 
 function formatPrice(price) {
   return Number(price).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function parsePrice(value) {
+  if (typeof value === "number") return Number.isFinite(value) && value >= 0 ? value : null;
+  const text = String(value).trim().replace(/[R$\s]/g, "");
+  if (!text) return null;
+
+  let normalized = text;
+  if (normalized.includes(",") && normalized.includes(".")) {
+    normalized = normalized.lastIndexOf(",") > normalized.lastIndexOf(".")
+      ? normalized.replace(/\./g, "").replace(",", ".")
+      : normalized.replace(/,/g, "");
+  } else if (normalized.includes(",")) {
+    normalized = normalized.replace(",", ".");
+  }
+  if (!/^\d+(?:\.\d+)?$/.test(normalized)) return null;
+  const price = Number(normalized);
+  return Number.isFinite(price) ? price : null;
 }
 
 function formatDate(timestamp) {
@@ -142,7 +163,10 @@ function renderProducts() {
       <td><span class="price-cell">${formatPrice(product.price)}</span></td>
       <td><button class="qr-mini-button" type="button" data-show-qr="${safeText(product.id)}"><span class="qr-mini-pattern">▦</span> Ver QR Code</button></td>
       <td><span class="date-cell">${formatDate(product.createdAt)}</span></td>
-      <td><button class="icon-button delete-button" type="button" data-delete-product="${safeText(product.id)}" aria-label="Excluir ${safeText(product.name)}" title="Excluir produto">⋯</button></td>
+      <td class="product-actions">
+        <button class="table-action-button" type="button" data-edit-product="${safeText(product.id)}">Editar</button>
+        <button class="icon-button delete-button" type="button" data-delete-product="${safeText(product.id)}" aria-label="Excluir ${safeText(product.name)}" title="Excluir produto">×</button>
+      </td>
     </tr>`).join("");
 }
 
@@ -300,40 +324,136 @@ $("#logout-button").addEventListener("click", () => {
 });
 
 $("#new-product-button").addEventListener("click", () => {
+  editingProductId = null;
   $("#product-form").reset();
+  $("#product-modal-title").textContent = "Novo produto";
+  $("#save-product-button").textContent = "Salvar e gerar QR";
   $("#product-error").classList.add("hidden");
   $("#product-modal").classList.remove("hidden");
   $("#product-name").focus();
 });
 $("#empty-new-button").addEventListener("click", () => $("#new-product-button").click());
 
+$("#import-products-button").addEventListener("click", () => $("#import-products-file").click());
+
+function normalizeHeader(value) {
+  return String(value).trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+async function importProducts(file) {
+  if (!window.XLSX) throw new Error("A biblioteca de planilhas não carregou. Verifique sua conexão e recarregue a página.");
+  const workbook = window.XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+  if (!firstSheet) throw new Error("A planilha não contém nenhuma aba.");
+  const rows = window.XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: true, defval: "" });
+  if (!rows.length) throw new Error("A planilha está vazia.");
+  const headerRowIndex = rows.findIndex((row) => {
+    const rowHeaders = row.map(normalizeHeader);
+    return rowHeaders.includes("nome") && rowHeaders.includes("preco");
+  });
+  if (headerRowIndex < 0) throw new Error('Não encontrei as colunas "Nome" e "Preço" na planilha.');
+  const headers = rows[headerRowIndex].map(normalizeHeader);
+  const nameColumn = headers.indexOf("nome");
+  const priceColumn = headers.indexOf("preco");
+
+  const importedProducts = [];
+  let skippedCount = 0;
+  for (const row of rows.slice(headerRowIndex + 1)) {
+    if (!row.some((cell) => String(cell).trim())) continue;
+    const name = String(row[nameColumn] ?? "").trim();
+    const price = parsePrice(row[priceColumn]);
+    if (!name || name.length > 100 || price === null) {
+      skippedCount += 1;
+      continue;
+    }
+    importedProducts.push({ name, price });
+  }
+  if (!importedProducts.length) {
+    throw new Error("Nenhum produto válido encontrado. Confira os nomes e preços da planilha.");
+  }
+  const skippedMessage = skippedCount ? ` ${skippedCount} linha(s) inválida(s) serão ignoradas.` : "";
+  if (!window.confirm(`Importar ${importedProducts.length} produto(s)?${skippedMessage} Cada produto será adicionado ao catálogo com seu próprio QR Code.`)) {
+    return;
+  }
+
+  let importedCount = 0;
+  try {
+    for (let offset = 0; offset < importedProducts.length; offset += 450) {
+      const batch = writeBatch(db);
+      const chunk = importedProducts.slice(offset, offset + 450);
+      chunk.forEach((product) => {
+        batch.set(doc(productCollection()), { ...product, createdAt: serverTimestamp() });
+      });
+      await batch.commit();
+      importedCount += chunk.length;
+    }
+    await loadProducts();
+    showToast(`${importedCount} produto(s) importado(s) com QR Code.`);
+  } catch (error) {
+    let refreshError = "";
+    await loadProducts().catch((loadError) => {
+      setConnection(false, "Erro ao atualizar");
+      refreshError = ` O catálogo não pôde ser atualizado: ${loadError.message}`;
+    });
+    const message = importedCount
+      ? `${importedCount} produto(s) foram importados antes da falha: ${error.message}.${refreshError}`
+      : `Não foi possível importar os produtos: ${error.message}.${refreshError}`;
+    showToast(message);
+  }
+}
+
+$("#import-products-file").addEventListener("change", async (event) => {
+  const [file] = event.target.files;
+  event.target.value = "";
+  if (!file) return;
+  const button = $("#import-products-button");
+  button.disabled = true;
+  try {
+    await importProducts(file);
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 $("#product-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   $("#product-error").classList.add("hidden");
   const name = $("#product-name").value.trim();
-  const price = Number($("#product-price").value);
-  if (!name || !Number.isFinite(price) || price <= 0) {
-    $("#product-error").textContent = "Informe um nome e um preço maior que zero.";
+  const price = parsePrice($("#product-price").value);
+  if (!name || name.length > 100 || price === null) {
+    $("#product-error").textContent = "Informe um nome (até 100 caracteres) e um preço válido igual ou maior que zero.";
     $("#product-error").classList.remove("hidden");
     return;
   }
   const button = $("#save-product-button");
+  const productId = editingProductId;
   button.disabled = true;
   button.textContent = "Salvando...";
   try {
-    const result = await addDoc(productCollection(), { name, price, createdAt: serverTimestamp() });
-    const product = { id: result.id, name, price, createdAt: new Date() };
-    products.unshift(product);
+    if (productId) {
+      await updateDoc(doc(db, "users", currentUser.uid, "products", productId), { name, price });
+      products = products.map((product) => product.id === productId ? { ...product, name, price } : product);
+    } else {
+      const result = await addDoc(productCollection(), { name, price, createdAt: serverTimestamp() });
+      const product = { id: result.id, name, price, createdAt: new Date() };
+      products.unshift(product);
+    }
     renderProducts();
     $("#product-modal").classList.add("hidden");
-    openQrModal(product);
-    showToast("Produto salvo e QR Code gerado.");
+    if (productId) {
+      showToast("Produto atualizado. O QR Code continua válido.");
+    } else {
+      openQrModal(products[0]);
+      showToast("Produto salvo e QR Code gerado.");
+    }
   } catch (error) {
     $("#product-error").textContent = `Não foi possível salvar no Firestore: ${error.message}`;
     $("#product-error").classList.remove("hidden");
   } finally {
     button.disabled = false;
-    button.textContent = "Salvar e gerar QR";
+    button.textContent = editingProductId ? "Salvar alterações" : "Salvar e gerar QR";
   }
 });
 
@@ -342,6 +462,21 @@ $("#products-table-body").addEventListener("click", async (event) => {
   if (qrButton) {
     const product = products.find((item) => item.id === qrButton.dataset.showQr);
     if (product) openQrModal(product);
+    return;
+  }
+  const editButton = event.target.closest("[data-edit-product]");
+  if (editButton) {
+    const product = products.find((item) => item.id === editButton.dataset.editProduct);
+    if (!product) return;
+    editingProductId = product.id;
+    $("#product-form").reset();
+    $("#product-name").value = product.name;
+    $("#product-price").value = String(product.price).replace(".", ",");
+    $("#product-modal-title").textContent = "Editar produto";
+    $("#save-product-button").textContent = "Salvar alterações";
+    $("#product-error").classList.add("hidden");
+    $("#product-modal").classList.remove("hidden");
+    $("#product-name").focus();
     return;
   }
   const deleteButton = event.target.closest("[data-delete-product]");

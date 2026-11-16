@@ -66,6 +66,7 @@ button { cursor: pointer; }
 .view { display: none; max-width: 1200px; margin: 0 auto; padding-top: 36px; }
 .view.active { display: block; }
 .page-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 18px; margin-bottom: 26px; }
+.page-actions { display: flex; gap: 8px; }
 .eyebrow { margin: 0 0 9px; color: var(--green); font-size: 9px; font-weight: 700; letter-spacing: 1.15px; }
 h1, h2, h3, p { margin-top: 0; }
 .page-heading h1 { margin: 0; color: #1c2a20; font: 700 28px "Manrope", sans-serif; letter-spacing: -.8px; }
@@ -110,7 +111,10 @@ tbody tr:last-child td { border-bottom: 0; }
 .qr-mini-button:hover { background: #eaf5ed; }
 .qr-mini-pattern { font-size: 13px; }
 .date-cell { color: #858f88; }
-.delete-button { width: 27px; height: 27px; font-size: 17px; transform: rotate(90deg); }
+.product-actions { display: flex; align-items: center; gap: 9px; }
+.table-action-button { padding: 5px 8px; border: 1px solid #e3eee6; border-radius: 5px; color: #33744a; background: #f5faf6; font-size: 9px; font-weight: 600; }
+.table-action-button:hover { background: #eaf5ed; }
+.delete-button { width: 24px; height: 24px; font-size: 17px; }
 .empty-state { display: none; padding: 42px 18px 35px; text-align: center; }
 .empty-state.visible { display: block; }
 .empty-illustration { display: grid; width: 43px; height: 43px; margin: 0 auto 12px; place-items: center; border-radius: 12px; color: #47855b; background: #eef6f0; font-size: 24px; }
@@ -200,9 +204,10 @@ tbody tr:last-child td { border-bottom: 0; }
   .topbar-right { gap: 0; }
   .view { padding-top: 24px; }
   .page-heading { align-items: flex-start; }
+  .page-actions { align-items: flex-end; flex-direction: column-reverse; gap: 6px; }
   .page-heading h1 { font-size: 24px; }
   .page-description { max-width: 255px; font-size: 10px; line-height: 1.5; }
-  #new-product-button { min-height: 35px; padding: 0 9px; font-size: 9px; white-space: nowrap; }
+  #new-product-button, #import-products-button { min-height: 35px; padding: 0 9px; font-size: 9px; white-space: nowrap; }
   .summary-grid { gap: 8px; margin-bottom: 15px; }
   .summary-card { min-height: 77px; gap: 9px; padding: 11px; }
   .summary-icon { flex-basis: 31px; width: 31px; height: 31px; font-size: 17px; }

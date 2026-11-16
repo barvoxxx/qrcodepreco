@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="style.css" />
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script type="module" src="app.js"></script>
   </head>
   <body>
@@ -74,9 +75,13 @@
               <h1>Produtos</h1>
               <p class="page-description">Cadastre produtos e gere etiquetas QR Code com preço.</p>
             </div>
-            <button class="button button-primary" type="button" id="new-product-button">
-              <span class="button-plus">＋</span> Novo produto
-            </button>
+            <div class="page-actions">
+              <button class="button button-secondary" type="button" id="import-products-button">Importar produtos</button>
+              <input class="hidden" id="import-products-file" type="file" accept=".xlsx,.xls,.csv" />
+              <button class="button button-primary" type="button" id="new-product-button">
+                <span class="button-plus">＋</span> Novo produto
+              </button>
+            </div>
           </div>
 
           <div class="summary-grid">
@@ -177,7 +182,7 @@
           <label class="field-label" for="product-name">Nome do produto</label>
           <input class="text-input" id="product-name" type="text" placeholder="Ex.: Café especial 250g" maxlength="100" required />
           <label class="field-label" for="product-price">Preço (R$)</label>
-          <div class="price-input-wrap"><span>R$</span><input class="text-input" id="product-price" type="number" placeholder="0,00" min="0.01" step="0.01" required /></div>
+          <div class="price-input-wrap"><span>R$</span>          <input class="text-input" id="product-price" type="text" inputmode="decimal" placeholder="0,00" required /></div>
           <p class="form-error hidden" id="product-error" role="alert"></p>
           <div class="modal-actions"><button class="button button-secondary" type="button" data-close-modal>Cancelar</button><button class="button button-primary" type="submit" id="save-product-button">Salvar e gerar QR</button></div>
         </form>
