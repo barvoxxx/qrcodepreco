@@ -202,16 +202,29 @@ function setProductResult(product) {
     <p class="result-meta">Informações salvas no Firestore</p>`;
 }
 
+function setScannedContent(content) {
+  $("#scan-placeholder").classList.add("hidden");
+  $("#scan-product").classList.remove("hidden");
+  $("#scan-product").innerHTML = `
+    <p class="eyebrow">QR CODE LIDO</p>
+    <h3>Conteúdo do código</h3>
+    <p class="result-qr-content">${safeText(content)}</p>`;
+}
+
 async function findScannedProduct(rawValue) {
   let url;
   try {
     url = new URL(rawValue);
   } catch {
-    throw new Error("Este QR Code não contém um link de produto válido.");
+    setScannedContent(rawValue);
+    return;
   }
   const productId = url.searchParams.get("produto");
   const userId = url.searchParams.get("uid");
-  if (!productId || !userId) throw new Error("Este QR Code não pertence a um produto do Preço QR.");
+  if (!productId || !userId) {
+    setScannedContent(rawValue);
+    return;
+  }
   if (!currentUser) throw new Error("Entre na conta proprietária deste produto para consultar os dados.");
   if (currentUser.uid !== userId) throw new Error("Este produto pertence a outra conta. Entre com a conta que o cadastrou.");
 
@@ -229,11 +242,25 @@ async function startScanner() {
     return;
   }
   $("#scanner-error").classList.add("hidden");
-  scanner = new window.Html5Qrcode("qr-reader");
+  scanner = new window.Html5Qrcode("qr-reader", {
+    formatsToSupport: [window.Html5QrcodeSupportedFormats.QR_CODE],
+  });
   try {
     await scanner.start(
       { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1 },
+      {
+        fps: 15,
+        qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.85);
+          return { width: size, height: size };
+        },
+        videoConstraints: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          focusMode: { ideal: "continuous" },
+        },
+      },
       async (decodedText) => {
         await scanner.stop();
         scannerStarted = false;
@@ -507,18 +534,43 @@ document.querySelectorAll(".modal-backdrop").forEach((modal) => {
     if (event.target === modal) modal.classList.add("hidden");
   });
 });
-$("#download-qr-button").addEventListener("click", () => {
-  const canvas = $("#qr-display canvas");
-  const image = $("#qr-display img");
-  const source = canvas?.toDataURL("image/png") || image?.src;
-  if (!source || !activeQrProduct) {
+$("#download-qr-button").addEventListener("click", async () => {
+  if (!activeQrProduct) {
     showToast("Não foi possível gerar a imagem do QR Code.");
     return;
   }
-  const link = document.createElement("a");
-  link.href = source;
-  link.download = `qr-${activeQrProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`;
-  link.click();
+  try {
+    const qrContainer = document.createElement("div");
+    createQrCode(qrContainer, qrUrl(activeQrProduct.id), 1024);
+    const qrCanvas = qrContainer.querySelector("canvas");
+    const qrImage = qrContainer.querySelector("img");
+    if (!qrCanvas && !qrImage) throw new Error("A biblioteca não gerou a imagem do QR Code.");
+    if (qrImage && !qrImage.complete) {
+      await new Promise((resolve, reject) => {
+        qrImage.addEventListener("load", resolve, { once: true });
+        qrImage.addEventListener("error", () => reject(new Error("Não foi possível preparar a imagem do QR Code.")), { once: true });
+      });
+    }
+
+    const sourceWidth = qrCanvas?.width || qrImage.naturalWidth;
+    const sourceHeight = qrCanvas?.height || qrImage.naturalHeight;
+    const quietZone = Math.ceil(Math.max(sourceWidth, sourceHeight) * 0.1);
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = sourceWidth + quietZone * 2;
+    exportCanvas.height = sourceHeight + quietZone * 2;
+    const context = exportCanvas.getContext("2d");
+    if (!context) throw new Error("Seu navegador não conseguiu preparar a imagem para download.");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    context.drawImage(qrCanvas || qrImage, quietZone, quietZone, sourceWidth, sourceHeight);
+
+    const link = document.createElement("a");
+    link.href = exportCanvas.toDataURL("image/png");
+    link.download = `qr-${activeQrProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`;
+    link.click();
+  } catch (error) {
+    showToast(`Não foi possível gerar a imagem do QR Code: ${error.message}`);
+  }
 });
 
 if (configReady) {
