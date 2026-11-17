@@ -150,7 +150,7 @@ async function readProductNameFromVideo() {
   const detectedText = String(result?.data?.text ?? "");
   if (!detectedText.trim()) return null;
 
-  return findProductByNameText(detectedText);
+  return detectedText.trim();
 }
 
 function safeText(value) {
@@ -271,6 +271,23 @@ function setScannedContent(content) {
     <p class="result-qr-content">${safeText(content)}</p>`;
 }
 
+function setNameLookupResult(product, message) {
+  const result = $("#name-lookup-result");
+  if (!product) {
+    result.innerHTML = `<p class="lookup-message">${safeText(message)}</p>`;
+    return;
+  }
+
+  result.innerHTML = `
+    <div class="lookup-product-card">
+      <span class="result-check">✓</span>
+      <p class="eyebrow">PRODUTO ENCONTRADO</p>
+      <h3>${safeText(product.name)}</h3>
+      <p class="result-price">${formatPrice(product.price)}</p>
+      <p class="result-meta">Resultado da busca por nome</p>
+    </div>`;
+}
+
 async function findScannedProduct(rawValue) {
   let url;
   try {
@@ -293,6 +310,53 @@ async function findScannedProduct(rawValue) {
   const product = { id: snapshot.id, ...snapshot.data() };
   setProductResult(product);
   return true;
+}
+
+async function searchProductByName(searchText) {
+  const name = String(searchText ?? "").trim();
+  if (!name) {
+    setNameLookupResult(null, "Digite ou leia o nome do produto para buscar.");
+    return null;
+  }
+
+  const product = findProductByNameText(name);
+  if (!product) {
+    setNameLookupResult(null, `Nenhum produto encontrado para "${name}".`);
+    return null;
+  }
+
+  setNameLookupResult(product, "");
+  return product;
+}
+
+async function handleNameSearch() {
+  const searchText = $("#product-name-search").value;
+  const product = await searchProductByName(searchText);
+  if (!product) return;
+  setProductResult(product, "NOME");
+}
+
+async function handleCameraNameScan() {
+  if (!scannerStarted) {
+    setNameLookupResult(null, "Ative a câmera no leitor de QR para usar a leitura do nome do produto.");
+    return;
+  }
+
+  try {
+    const detectedText = await readProductNameFromVideo();
+    if (!detectedText) {
+      setNameLookupResult(null, "Não foi possível identificar o nome do produto na imagem.");
+      return;
+    }
+
+    $("#product-name-search").value = detectedText;
+    const product = await searchProductByName(detectedText);
+    if (product) {
+      setProductResult(product, "NOME");
+    }
+  } catch (error) {
+    setNameLookupResult(null, `Não foi possível ler o nome do produto: ${error.message}`);
+  }
 }
 
 async function startScanner() {
@@ -330,26 +394,19 @@ async function startScanner() {
           const productFound = await findScannedProduct(decodedText);
           if (productFound) return;
         } catch (error) {
-          // Se a leitura do QR falhar, tenta identificar o produto pelo nome na imagem.
-        }
-
-        try {
-          const productByName = await readProductNameFromVideo();
-          if (productByName) {
-            setProductResult(productByName, "NOME");
-            return;
-          }
-        } catch (error) {
-          // A OCR é opcional; o QR continua sendo a via principal.
+          $("#scanner-error").textContent = error.message;
+          $("#scanner-error").classList.remove("hidden");
+          showToast(error.message);
+          return;
         }
 
         if (decodedText && decodedText.trim()) {
           setScannedContent(decodedText);
         }
 
-        $("#scanner-error").textContent = "Não foi possível ler o QR Code. Ajuste o foco da câmera e tente novamente ou aproxime o nome do produto.";
+        $("#scanner-error").textContent = "Não foi possível ler o QR Code. Ajuste o foco da câmera e tente novamente.";
         $("#scanner-error").classList.remove("hidden");
-        showToast("Não foi possível identificar o QR Code. Tente ler o nome do produto.");
+        showToast("QR Code não identificado. Use a busca por nome abaixo.");
       },
       () => {},
     );
@@ -602,6 +659,14 @@ $("#products-table-body").addEventListener("click", async (event) => {
 });
 
 $("#search-input").addEventListener("input", renderProducts);
+$("#product-name-search").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    handleNameSearch();
+  }
+});
+$("#product-name-search-button").addEventListener("click", handleNameSearch);
+$("#product-name-camera-button").addEventListener("click", handleCameraNameScan);
 document.querySelectorAll(".nav-link").forEach((button) => {
   button.addEventListener("click", () => activateView(button.dataset.view));
 });

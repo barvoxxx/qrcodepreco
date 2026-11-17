@@ -127,14 +127,14 @@
             <div>
               <p class="eyebrow">LEITURA RÁPIDA</p>
               <h1>Ler QR Code</h1>
-              <p class="page-description">Aponte a câmera para ler o QR Code do produto; se ele não for lido, o sistema tenta identificar pelo nome.</p>
+              <p class="page-description">Aponte a câmera para ler o QR Code do produto. Para consultar por nome, use a busca separada abaixo.</p>
             </div>
           </div>
           <div class="scanner-layout">
             <section class="panel scanner-panel">
               <div class="scanner-title"><span class="scanner-title-icon">⌗</span><div><h2>Leitor de QR Code</h2><p>Posicione o código dentro da moldura.</p></div></div>
               <div id="qr-reader"></div>
-              <p class="scanner-hint"><span class="hint-dot"></span> A câmera só é ativada após sua permissão. Se o QR não for lido, o nome do produto também pode ser identificado.</p>
+              <p class="scanner-hint"><span class="hint-dot"></span> A câmera só é ativada após sua permissão.</p>
               <p class="scanner-error hidden" id="scanner-error" role="alert"></p>
             </section>
             <section class="panel scan-result-panel">
@@ -147,6 +147,25 @@
               <div class="scan-product hidden" id="scan-product"></div>
             </section>
           </div>
+
+          <section class="panel name-lookup-panel">
+            <div class="panel-header lookup-header">
+              <div>
+                <h2>Buscar pelo nome do produto</h2>
+                <p>Use este campo para localizar o produto pelo nome ou ler o nome diretamente pela câmera.</p>
+              </div>
+            </div>
+            <div class="name-lookup-controls">
+              <input class="text-input" id="product-name-search" type="text" placeholder="Ex.: Café especial 250g" aria-label="Nome do produto" />
+              <div class="lookup-actions">
+                <button class="button button-primary" type="button" id="product-name-search-button">Buscar produto</button>
+                <button class="button button-secondary" type="button" id="product-name-camera-button">Ler nome pela câmera</button>
+              </div>
+            </div>
+            <div class="name-lookup-result" id="name-lookup-result">
+              <p class="lookup-message">Digite um nome ou use a leitura da câmera para localizar o produto.</p>
+            </div>
+          </section>
         </section>
       </main>
     </div>
