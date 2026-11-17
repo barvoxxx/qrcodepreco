@@ -41,7 +41,7 @@ Para testar antes de publicar, abra a pasta no VS Code e inicie um servidor loca
 - Use **Editar** na lista para alterar nome ou preço. O QR Code existente continua válido e passa a mostrar os dados atualizados.
 - Clique em **Importar produtos** para selecionar uma planilha `.xlsx`, `.xls` ou `.csv`. A primeira aba deve ter colunas chamadas **Nome** e **Preço** (acentos e maiúsculas não são obrigatórios). Cada linha válida é adicionada como um novo produto e recebe seu próprio QR Code; linhas sem nome ou com preço inválido são ignoradas. São aceitos preços com vírgula ou ponto decimal, inclusive valores como `0,00`, `0.0` e `000`. A importação não substitui produtos que já estão no catálogo.
 - Em **Ver QR Code**, abra ou baixe a etiqueta PNG de qualquer produto cadastrado. O arquivo baixado é gerado em alta resolução e inclui margem branca para facilitar a impressão e a leitura.
-- Na seção **Ler QR Code**, permita o acesso à câmera e aponte-a para uma etiqueta. O produto aparece no resultado após a leitura.
+- Na seção **Ler QR Code**, permita o acesso à câmera e aponte-a para uma etiqueta. O produto aparece no resultado após a leitura do QR Code; se a leitura do código falhar, o sistema tenta reconhecer o nome do produto e localizar o registro correspondente.
 - Para abrir a etiqueta em outro aparelho, publique no GitHub Pages e gere/baixe o QR Code pelo endereço HTTPS publicado. Os códigos gerados no endereço local de teste apontam para esse endereço local, então gere novas etiquetas após publicar. A leitura requer login na mesma conta que cadastrou o produto e acesso à câmera no navegador.
 
 As bibliotecas Firebase, QRCode.js e html5-qrcode são carregadas por CDN; é necessária conexão com a internet para carregar a aplicação.

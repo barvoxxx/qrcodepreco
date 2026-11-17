@@ -95,6 +95,64 @@ function formatDate(timestamp) {
   return date ? new Intl.DateTimeFormat("pt-BR").format(date) : "Agora";
 }
 
+function normalizeProductMatchText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function findProductByNameText(rawText) {
+  if (!Array.isArray(products) || !products.length) return null;
+  const normalizedInput = normalizeProductMatchText(rawText);
+  if (!normalizedInput) return null;
+
+  let bestMatch = null;
+  let bestScore = 0;
+
+  for (const product of products) {
+    const normalizedName = normalizeProductMatchText(product.name);
+    if (!normalizedName) continue;
+    if (normalizedInput === normalizedName) return product;
+
+    const containsName = normalizedInput.includes(normalizedName) || normalizedName.includes(normalizedInput);
+    const inputTokens = normalizedInput.split(" ").filter(Boolean);
+    const nameTokens = normalizedName.split(" ").filter(Boolean);
+    const overlap = inputTokens.filter((token) => nameTokens.includes(token)).length;
+    const score = containsName ? 100 : overlap;
+
+    if (score > bestScore) {
+      bestMatch = product;
+      bestScore = score;
+    }
+  }
+
+  if (bestMatch && bestScore >= 2) return bestMatch;
+  return null;
+}
+
+async function readProductNameFromVideo() {
+  if (!window.Tesseract || !products.length) return null;
+  const video = document.querySelector("#qr-reader video");
+  if (!video || video.readyState < 2) return null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth || 1280;
+  canvas.height = video.videoHeight || 720;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  const result = await window.Tesseract.recognize(canvas, "por+eng", { logger: () => {} });
+  const detectedText = String(result?.data?.text ?? "");
+  if (!detectedText.trim()) return null;
+
+  return findProductByNameText(detectedText);
+}
+
 function safeText(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({
     "&": "&amp;",
@@ -191,15 +249,17 @@ function openQrModal(product) {
   $("#qr-modal").classList.remove("hidden");
 }
 
-function setProductResult(product) {
+function setProductResult(product, source = "QR") {
   $("#scan-placeholder").classList.add("hidden");
   $("#scan-product").classList.remove("hidden");
+  const eyebrow = source === "NOME" ? "PRODUTO ENCONTRADO PELO NOME" : "PRODUTO ENCONTRADO";
+  const meta = source === "NOME" ? "Identificado pelo nome do produto" : "Informações salvas no Firestore";
   $("#scan-product").innerHTML = `
     <span class="result-check">✓</span>
-    <p class="eyebrow">PRODUTO ENCONTRADO</p>
+    <p class="eyebrow">${eyebrow}</p>
     <h3>${safeText(product.name)}</h3>
     <p class="result-price">${formatPrice(product.price)}</p>
-    <p class="result-meta">Informações salvas no Firestore</p>`;
+    <p class="result-meta">${meta}</p>`;
 }
 
 function setScannedContent(content) {
@@ -217,13 +277,13 @@ async function findScannedProduct(rawValue) {
     url = new URL(rawValue);
   } catch {
     setScannedContent(rawValue);
-    return;
+    return false;
   }
   const productId = url.searchParams.get("produto");
   const userId = url.searchParams.get("uid");
   if (!productId || !userId) {
     setScannedContent(rawValue);
-    return;
+    return false;
   }
   if (!currentUser) throw new Error("Entre na conta proprietária deste produto para consultar os dados.");
   if (currentUser.uid !== userId) throw new Error("Este produto pertence a outra conta. Entre com a conta que o cadastrou.");
@@ -232,6 +292,7 @@ async function findScannedProduct(rawValue) {
   if (!snapshot.exists()) throw new Error("Produto não encontrado. Ele pode ter sido excluído.");
   const product = { id: snapshot.id, ...snapshot.data() };
   setProductResult(product);
+  return true;
 }
 
 async function startScanner() {
@@ -264,13 +325,31 @@ async function startScanner() {
       async (decodedText) => {
         await scanner.stop();
         scannerStarted = false;
+
         try {
-          await findScannedProduct(decodedText);
+          const productFound = await findScannedProduct(decodedText);
+          if (productFound) return;
         } catch (error) {
-          $("#scanner-error").textContent = error.message;
-          $("#scanner-error").classList.remove("hidden");
-          showToast(error.message);
+          // Se a leitura do QR falhar, tenta identificar o produto pelo nome na imagem.
         }
+
+        try {
+          const productByName = await readProductNameFromVideo();
+          if (productByName) {
+            setProductResult(productByName, "NOME");
+            return;
+          }
+        } catch (error) {
+          // A OCR é opcional; o QR continua sendo a via principal.
+        }
+
+        if (decodedText && decodedText.trim()) {
+          setScannedContent(decodedText);
+        }
+
+        $("#scanner-error").textContent = "Não foi possível ler o QR Code. Ajuste o foco da câmera e tente novamente ou aproxime o nome do produto.";
+        $("#scanner-error").classList.remove("hidden");
+        showToast("Não foi possível identificar o QR Code. Tente ler o nome do produto.");
       },
       () => {},
     );
