@@ -337,15 +337,15 @@ async function handleNameSearch() {
 }
 
 async function handleCameraNameScan() {
-  if (!scannerStarted) {
-    setNameLookupResult(null, "Ative a câmera no leitor de QR para usar a leitura do nome do produto.");
-    return;
-  }
-
   try {
+    if (!scannerStarted) {
+      await startScanner();
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+    }
+
     const detectedText = await readProductNameFromVideo();
     if (!detectedText) {
-      setNameLookupResult(null, "Não foi possível identificar o nome do produto na imagem.");
+      setNameLookupResult(null, "Não foi possível identificar o nome do produto na imagem. Ajuste a câmera e tente novamente.");
       return;
     }
 

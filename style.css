@@ -145,6 +145,8 @@ tbody tr:last-child td { border-bottom: 0; }
 .lookup-message { margin: 0; color: #68736d; font-size: 10px; line-height: 1.5; }
 .lookup-product-card { text-align: center; }
 .result-placeholder { display: flex; min-height: 227px; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+#qr-reader { width: 100%; max-width: 420px; margin: 0 auto; overflow: hidden; border: 1px solid #e8ece8 !important; border-radius: 8px; }
+#qr-reader video { display: block; width: 100%; height: auto; max-height: 420px; object-fit: cover; }
 .result-placeholder-icon { display: grid; width: 49px; height: 49px; margin-bottom: 12px; place-items: center; border-radius: 14px; color: #85a58d; background: #f0f5f1; font-size: 26px; }
 .result-placeholder h3 { margin: 0 0 6px; color: #4a574e; font: 700 12px "Manrope", sans-serif; }
 .result-placeholder p { max-width: 220px; margin: 0; color: #99a19b; font-size: 10px; line-height: 1.6; }
@@ -226,5 +228,11 @@ tbody tr:last-child td { border-bottom: 0; }
   .search-box { width: 100%; }
   th, td { padding-right: 12px; padding-left: 12px; }
   .scanner-panel, .scan-result-panel { padding: 14px; }
+  .name-lookup-controls { flex-direction: column; align-items: stretch; padding: 0 14px 8px; }
+  #product-name-search { max-width: none; width: 100%; }
+  .lookup-actions { display: grid; grid-template-columns: 1fr; }
+  .lookup-actions .button { width: 100%; }
+  .name-lookup-result { margin: 0 14px; }
+  #qr-reader { max-width: 100%; }
   .auth-card { padding: 26px 22px 22px; }
 }
